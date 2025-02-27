@@ -713,7 +713,8 @@ function App() {
     setSnappedItemId(itemId);
   };
   
-  // Small control button for manual item movement
+  // Small control button for manual item movement (keeping for reference)
+  /*
   const ItemControlButton = styled.button`
     background-color: ${colors.background};
     color: ${colors.foreground};
@@ -731,7 +732,8 @@ function App() {
     &:hover {
       background-color: ${colors.blue};
     }
-  `;
+  };
+  */
   
   // Function to render an item
   const renderItem = (id: string, provided: any, snapshot: any) => {
