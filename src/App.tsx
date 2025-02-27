@@ -98,7 +98,7 @@ const Header = styled.header`
 const TierGrid = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  /* Remove gap between rows */
   margin-bottom: 2rem;
   border: 2px solid ${colors.gray};
   border-radius: 6px;
@@ -121,6 +121,12 @@ const TierRow = styled.div<{ color: string }>`
     width: 2px;
     background-color: ${colors.darkgray};
     opacity: 0.5;
+  }
+
+  &:first-child {
+    .tier-separator {
+      display: none;
+    }
   }
 
   &:last-child {
@@ -178,13 +184,12 @@ const Item = styled.div<{ hasImage: boolean }>`
   user-select: none;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   cursor: grab;
-  background-size: cover;
-  background-position: center;
   position: relative;
   border: ${props => props.hasImage ? `1px solid ${colors.darkgray}` : 'none'};
   transition: transform 0.2s, box-shadow 0.2s;
   margin: 2px;
   flex-shrink: 0;
+  overflow: hidden; /* Ensure images don't overflow */
   
   &:hover {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
@@ -205,11 +210,19 @@ const Item = styled.div<{ hasImage: boolean }>`
     opacity: 0;
     transition: opacity 0.2s;
     pointer-events: none;
+    z-index: 5;
   }
   
   &:hover .item-controls {
     opacity: 1;
     pointer-events: auto;
+  }
+  
+  /* Make sure exported images don't have the controls */
+  @media print {
+    .item-controls {
+      display: none !important;
+    }
   }
 `;
 
@@ -308,12 +321,42 @@ const ModalButton = styled.button<{ isPrimary?: boolean }>`
   }
 `;
 
-// DOM to image function
+// DOM to image function - simpler approach that bypasses image preloading issues
 const exportAsImage = async (element: HTMLElement, fileName: string) => {
+  // Create a loading indicator
+  const loadingEl = document.createElement('div');
+  loadingEl.style.position = 'fixed';
+  loadingEl.style.top = '50%';
+  loadingEl.style.left = '50%';
+  loadingEl.style.transform = 'translate(-50%, -50%)';
+  loadingEl.style.padding = '20px';
+  loadingEl.style.backgroundColor = colors.background;
+  loadingEl.style.color = colors.foreground;
+  loadingEl.style.borderRadius = '8px';
+  loadingEl.style.zIndex = '10000';
+  loadingEl.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+  loadingEl.style.border = `1px solid ${colors.darkgray}`;
+  loadingEl.textContent = 'Preparing to export...';
+  document.body.appendChild(loadingEl);
+
   try {
+    // Give the browser a moment to render the loading indicator
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // First approach: Try using html2canvas directly
+    loadingEl.textContent = 'Exporting tier list...';
+    
     const canvas = await html2canvas(element, {
       backgroundColor: colors.background,
       scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      foreignObjectRendering: false, // Try with this disabled first
+      logging: true,
+      ignoreElements: (el) => {
+        // Ignore elements with 'item-controls' class
+        return el.classList.contains('item-controls');
+      }
     });
     
     // Download the image
@@ -322,9 +365,60 @@ const exportAsImage = async (element: HTMLElement, fileName: string) => {
     link.download = fileName;
     link.href = image;
     link.click();
+    
+    // Success!
+    loadingEl.textContent = 'Export complete!';
+    await new Promise(resolve => setTimeout(resolve, 1000));
   } catch (error) {
     console.error('Error exporting image:', error);
-    alert('Failed to export image. Make sure all images are loaded correctly.');
+    loadingEl.textContent = 'Error exporting image. Trying backup method...';
+    
+    try {
+      // Backup method: Take a direct screenshot approach
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Create a clone of the element to capture
+      const clone = element.cloneNode(true) as HTMLElement;
+      clone.style.position = 'absolute';
+      clone.style.left = '-9999px';
+      clone.style.top = '0';
+      document.body.appendChild(clone);
+      
+      // Remove any interactive elements that might cause issues
+      const controls = clone.querySelectorAll('.item-controls');
+      controls.forEach(control => control.remove());
+      
+      // Try again with the clone
+      const canvas = await html2canvas(clone, {
+        backgroundColor: colors.background,
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false
+      });
+      
+      // Download the image
+      const image = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.download = fileName;
+      link.href = image;
+      link.click();
+      
+      document.body.removeChild(clone);
+      
+      // Success with backup method
+      loadingEl.textContent = 'Export complete!';
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } catch (backupError) {
+      console.error('Backup export failed:', backupError);
+      loadingEl.textContent = 'Sorry, export failed. Try taking a screenshot instead.';
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  } finally {
+    // Always remove the loading element
+    if (document.body.contains(loadingEl)) {
+      document.body.removeChild(loadingEl);
+    }
   }
 };
 
@@ -355,7 +449,22 @@ function App() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const addNewItem = () => {
-    const newItemId = `item-${Date.now()}`;
+    // Find the highest existing item number
+    let highestNumber = 0;
+    Object.keys(itemsData).forEach(id => {
+      const parts = id.split('-');
+      if (parts.length === 2) {
+        const num = parseInt(parts[1]);
+        if (!isNaN(num) && num > highestNumber) {
+          highestNumber = num;
+        }
+      }
+    });
+    
+    // Create new item with sequential number
+    const nextNumber = highestNumber + 1;
+    const newItemId = `item-${nextNumber}`;
+    
     setItemsData(prev => ({
       ...prev,
       [newItemId]: { id: newItemId, imageUrl: null }
@@ -603,7 +712,6 @@ function App() {
   const renderItem = (id: string, provided: any, snapshot: any) => {
     const itemData = itemsData[id];
     const hasImage = !!itemData?.imageUrl;
-    const backgroundImage = hasImage ? `url(${itemData.imageUrl})` : 'none';
     
     // Add animation class if this item was just dropped
     const isSnapped = id === snappedItemId;
@@ -611,11 +719,6 @@ function App() {
     // Clear snapped state after animation
     if (isSnapped) {
       setTimeout(() => setSnappedItemId(null), 300);
-    }
-    
-    // Log drag state for debugging
-    if (snapshot.isDragging) {
-      console.log("Dragging item:", id);
     }
     
     // Render manual tier selection dropdown
@@ -661,17 +764,38 @@ function App() {
         className={isSnapped ? 'item-snapped' : ''}
         style={{
           ...provided.draggableProps.style,
-          backgroundImage,
           boxShadow: snapshot.isDragging 
             ? '0 5px 15px rgba(0, 0, 0, 0.3)' 
             : '0 2px 5px rgba(0, 0, 0, 0.2)',
-          // Force cursor style to show it's draggable
           cursor: snapshot.isDragging ? 'grabbing' : 'grab',
-          // Force touch action to avoid issues on touch devices
           touchAction: 'none'
         }}
       >
-        {!hasImage && id.split('-')[1]}
+        {hasImage ? (
+          // Using an actual img element instead of background-image for better export compatibility
+          <img 
+            src={itemData.imageUrl || ''}
+            alt=""
+            style={{
+              width: '100%', 
+              height: '100%', 
+              objectFit: 'cover',
+              borderRadius: '4px',
+              display: 'block'
+            }}
+            crossOrigin="anonymous"
+          />
+        ) : (
+          <div style={{ 
+            fontSize: id.split('-')[1].length > 2 ? '14px' : '16px',
+            fontWeight: 'bold',
+            textAlign: 'center',
+            maxWidth: '100%',
+            overflow: 'hidden'
+          }}>
+            {id.split('-')[1]}
+          </div>
+        )}
         
         {/* Manual controls for positioning (in case drag and drop doesn't work) */}
         <div className="item-controls">
