@@ -843,7 +843,7 @@ function App() {
       <GlobalStyle />
       <AppContainer>
         <Header>
-          <h1>Gruvbox Tier List</h1>
+          <h1>Tier List Generator</h1>
         </Header>
         
         <Controls>
