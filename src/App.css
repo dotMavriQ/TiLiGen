@@ -1,0 +1,104 @@
+/* Import a clean sans font */
+@import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;700&display=swap');
+
+/* CSS Reset */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Gruvbox Dark Theme Colors */
+:root {
+  --bg: #282828;
+  --fg: #ebdbb2;
+  --bg1: #3c3836;
+  --bg2: #504945;
+  --bg3: #665c54;
+  --bg4: #7c6f64;
+  --gray: #928374;
+  --red: #cc241d;
+  --green: #98971a;
+  --yellow: #d79921;
+  --blue: #458588;
+  --purple: #b16286;
+  --aqua: #689d6a;
+  --orange: #d65d0e;
+  --br-red: #fb4934;
+  --br-green: #b8bb26;
+  --br-yellow: #fabd2f;
+  --br-blue: #83a598;
+  --br-purple: #d3869b;
+  --br-aqua: #8ec07c;
+  --br-orange: #fe8019;
+}
+
+body {
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--br-aqua);
+  margin-bottom: 1rem;
+}
+
+h2 {
+  font-size: 1.5rem;
+  border-bottom: 2px solid var(--bg3);
+  padding-bottom: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg3);
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bg4);
+}
+
+/* Animation for drag and drop */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(251, 73, 52, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(251, 73, 52, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(251, 73, 52, 0);
+  }
+}
+
+/* Override for items with images */
+[data-rbd-draggable-context-id] [data-rbd-draggable-id] {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+[data-rbd-draggable-context-id] [data-rbd-draggable-id]:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  transform: translateY(-2px);
+}
+
+/* Fix for image object-fit */
+[data-rbd-draggable-context-id] [data-rbd-draggable-id] {
+  overflow: hidden;
+}
+
+/* Ensure images are properly contained */
+[data-rbd-draggable-id] {
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+}
