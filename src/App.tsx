@@ -1,8 +1,32 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import styled, { createGlobalStyle } from 'styled-components';
 import html2canvas from 'html2canvas';
 import './App.css';
+
+// Fix for React 18 StrictMode and react-beautiful-dnd
+// See: https://github.com/atlassian/react-beautiful-dnd/issues/2399
+const ReactBDFixes = () => {
+  useEffect(() => {
+    // Monkey patching
+    const originalConsoleError = console.error;
+    console.error = (...args) => {
+      if (
+        typeof args[0] === 'string' &&
+        args[0].includes('Warning: forwardRef render functions do not support propTypes or defaultProps')
+      ) {
+        return;
+      }
+      originalConsoleError.apply(console, args);
+    };
+
+    return () => {
+      console.error = originalConsoleError;
+    };
+  }, []);
+
+  return null;
+};
 
 // Interface for item data
 interface ItemData {
@@ -83,9 +107,21 @@ const TierGrid = styled.div`
 
 const TierRow = styled.div<{ color: string }>`
   display: flex;
-  min-height: 80px;
+  min-height: 85px;
   background-color: ${colors.black};
-  border-bottom: 1px solid ${colors.darkgray};
+  border-bottom: 2px solid ${colors.darkgray};
+  position: relative;
+
+  &:before {
+    content: '';
+    position: absolute;
+    left: 80px; /* Width of tier label */
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: ${colors.darkgray};
+    opacity: 0.5;
+  }
 
   &:last-child {
     border-bottom: none;
@@ -112,18 +148,21 @@ const TierContent = styled.div`
   padding: 8px;
   min-height: 80px;
   background-color: rgba(40, 40, 40, 0.4);
+  align-items: center;
 `;
 
 const ItemsPool = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   padding: 1rem;
   min-height: 120px;
   border: 2px dashed ${colors.gray};
   border-radius: 6px;
   margin-bottom: 2rem;
   background-color: rgba(40, 40, 40, 0.2);
+  align-items: center;
+  justify-content: flex-start;
 `;
 
 const Item = styled.div<{ hasImage: boolean }>`
@@ -144,6 +183,8 @@ const Item = styled.div<{ hasImage: boolean }>`
   position: relative;
   border: ${props => props.hasImage ? `1px solid ${colors.darkgray}` : 'none'};
   transition: transform 0.2s, box-shadow 0.2s;
+  margin: 2px;
+  flex-shrink: 0;
   
   &:hover {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
@@ -151,6 +192,24 @@ const Item = styled.div<{ hasImage: boolean }>`
   
   &:active {
     cursor: grabbing;
+  }
+  
+  /* Control buttons that appear on hover */
+  .item-controls {
+    position: absolute;
+    top: -20px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  
+  &:hover .item-controls {
+    opacity: 1;
+    pointer-events: auto;
   }
 `;
 
@@ -440,6 +499,7 @@ function App() {
     
     // Add item to destination list
     if (source.droppableId === destination.droppableId) {
+      // If moving within the same list, maintain the original order with the item moved
       sourceList.splice(destination.index, 0, removed);
       
       setItems({
@@ -447,7 +507,35 @@ function App() {
         [source.droppableId]: sourceList
       });
     } else {
+      // If moving to a different list, place the item in the destination list
+      // at the specified index to maintain left-to-right ordering
       destList.splice(destination.index, 0, removed);
+      
+      // Play a subtle locking sound when item is placed in a tier
+      if (destination.droppableId !== 'pool') {
+        try {
+          // Create a quick "snap" sound
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+          
+          oscillator.type = 'sine';
+          oscillator.frequency.value = 800;
+          gainNode.gain.value = 0.1;
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          
+          oscillator.start();
+          gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+          oscillator.stop(audioContext.currentTime + 0.1);
+        } catch (err) {
+          // Ignore audio errors
+        }
+      }
+      
+      // Set the snapped item for animation
+      setSnappedItemId(removed);
       
       setItems({
         ...items,
@@ -457,11 +545,111 @@ function App() {
     }
   };
 
+  // Track snapped items for animation
+  const [snappedItemId, setSnappedItemId] = useState<string | null>(null);
+  
+  // Add fallback method for moving items between tiers
+  const moveItemToTier = (itemId: string, destTier: string) => {
+    // Find the current location of the item
+    let sourceList = '';
+    Object.entries(items).forEach(([listId, itemIds]) => {
+      if (itemIds.includes(itemId)) {
+        sourceList = listId;
+      }
+    });
+    
+    if (!sourceList) return;
+    
+    // Don't do anything if already in the target tier
+    if (sourceList === destTier) return;
+    
+    // Update the lists
+    const updatedItems = { ...items };
+    
+    // Remove from source
+    updatedItems[sourceList] = updatedItems[sourceList].filter(id => id !== itemId);
+    
+    // Add to destination
+    updatedItems[destTier] = [...updatedItems[destTier], itemId];
+    
+    // Update state
+    setItems(updatedItems);
+    
+    // Set snapped for animation
+    setSnappedItemId(itemId);
+  };
+  
+  // Small control button for manual item movement
+  const ItemControlButton = styled.button`
+    background-color: ${colors.background};
+    color: ${colors.foreground};
+    border: 1px solid ${colors.darkgray};
+    border-radius: 4px;
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+    margin: 0 2px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    &:hover {
+      background-color: ${colors.blue};
+    }
+  `;
+  
   // Function to render an item
-  const renderItem = (id: string, provided: any) => {
+  const renderItem = (id: string, provided: any, snapshot: any) => {
     const itemData = itemsData[id];
     const hasImage = !!itemData?.imageUrl;
     const backgroundImage = hasImage ? `url(${itemData.imageUrl})` : 'none';
+    
+    // Add animation class if this item was just dropped
+    const isSnapped = id === snappedItemId;
+    
+    // Clear snapped state after animation
+    if (isSnapped) {
+      setTimeout(() => setSnappedItemId(null), 300);
+    }
+    
+    // Log drag state for debugging
+    if (snapshot.isDragging) {
+      console.log("Dragging item:", id);
+    }
+    
+    // Render manual tier selection dropdown
+    const renderTierDropdown = () => {
+      return (
+        <div className="item-manual-move">
+          <select 
+            onChange={(e) => {
+              const selectedTier = e.target.value;
+              if (selectedTier) {
+                moveItemToTier(id, selectedTier);
+                // Reset dropdown after use
+                e.target.value = '';
+              }
+            }}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: colors.background,
+              color: colors.foreground,
+              border: `1px solid ${colors.darkgray}`,
+              borderRadius: '4px',
+              padding: '2px',
+              fontSize: '12px'
+            }}
+          >
+            <option value="">Move to...</option>
+            <option value="pool">Pool</option>
+            {tierLevels.map(tier => (
+              <option key={tier.id} value={tier.id}>Tier {tier.label}</option>
+            ))}
+          </select>
+        </div>
+      );
+    };
     
     return (
       <Item
@@ -470,18 +658,32 @@ function App() {
         {...provided.dragHandleProps}
         onClick={() => handleItemClick(id)}
         hasImage={hasImage}
+        className={isSnapped ? 'item-snapped' : ''}
         style={{
           ...provided.draggableProps.style,
-          backgroundImage
+          backgroundImage,
+          boxShadow: snapshot.isDragging 
+            ? '0 5px 15px rgba(0, 0, 0, 0.3)' 
+            : '0 2px 5px rgba(0, 0, 0, 0.2)',
+          // Force cursor style to show it's draggable
+          cursor: snapshot.isDragging ? 'grabbing' : 'grab',
+          // Force touch action to avoid issues on touch devices
+          touchAction: 'none'
         }}
       >
         {!hasImage && id.split('-')[1]}
+        
+        {/* Manual controls for positioning (in case drag and drop doesn't work) */}
+        <div className="item-controls">
+          {renderTierDropdown()}
+        </div>
       </Item>
     );
   };
 
   return (
     <>
+      <ReactBDFixes />
       <GlobalStyle />
       <AppContainer>
         <Header>
@@ -496,6 +698,17 @@ function App() {
           <Button onClick={exportImage} style={{ backgroundColor: colors.purple }}>Export Image</Button>
         </Controls>
         
+        <div style={{ 
+          marginBottom: '1rem', 
+          padding: '8px', 
+          backgroundColor: colors.black, 
+          borderRadius: '4px',
+          border: `1px solid ${colors.yellow}`,
+          fontSize: '0.9rem'
+        }}>
+          <strong style={{ color: colors.brightyellow }}>Tip:</strong> If drag and drop isn't working, hover over any item and use the dropdown menu to move it between tiers.
+        </div>
+        
         <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <h2>Items Pool</h2>
           <Droppable droppableId="pool" direction="horizontal">
@@ -506,7 +719,7 @@ function App() {
               >
                 {items.pool.map((id, index) => (
                   <Draggable key={id} draggableId={id} index={index}>
-                    {(provided) => renderItem(id, provided)}
+                    {(provided, snapshot) => renderItem(id, provided, snapshot)}
                   </Draggable>
                 ))}
                 {provided.placeholder}
@@ -527,7 +740,7 @@ function App() {
                     >
                       {items[tier.id].map((id, index) => (
                         <Draggable key={id} draggableId={id} index={index}>
-                          {(provided) => renderItem(id, provided)}
+                          {(provided, snapshot) => renderItem(id, provided, snapshot)}
                         </Draggable>
                       ))}
                       {provided.placeholder}

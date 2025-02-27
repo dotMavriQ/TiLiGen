@@ -84,16 +84,32 @@ h2 {
 /* Override for items with images */
 [data-rbd-draggable-context-id] [data-rbd-draggable-id] {
   transition: transform 0.2s, box-shadow 0.2s;
+  z-index: 1;
 }
 
 [data-rbd-draggable-context-id] [data-rbd-draggable-id]:hover {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
   transform: translateY(-2px);
+  z-index: 10;
 }
 
 /* Fix for image object-fit */
 [data-rbd-draggable-context-id] [data-rbd-draggable-id] {
-  overflow: hidden;
+  overflow: visible;
+}
+
+/* Make sure draggables work correctly */
+[data-rbd-draggable-id] {
+  transform: translate(0, 0);
+}
+
+/* Make item controls more visible */
+.item-controls {
+  background-color: rgba(40, 40, 40, 0.9);
+  padding: 3px;
+  border-radius: 4px;
+  border: 1px solid #504945;
+  z-index: 100;
 }
 
 /* Ensure images are properly contained */
@@ -101,4 +117,28 @@ h2 {
   background-size: cover !important;
   background-position: center !important;
   background-repeat: no-repeat !important;
+}
+
+/* Styling for the dragging item */
+[data-rbd-draggable-context-id] [data-rbd-draggable-id][data-rbd-dragging="true"] {
+  transform: scale(1.05) !important;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3) !important;
+  z-index: 9999 !important;
+}
+
+/* Styling for droppable areas when dragging over */
+[data-rbd-droppable-id][data-rbd-droppable-context-id][data-rbd-is-dragging-over="true"] {
+  background-color: rgba(105, 157, 106, 0.2) !important;
+  transition: background-color 0.2s ease;
+}
+
+/* Animation for snap effect */
+@keyframes snapEffect {
+  0% { transform: scale(1.05); }
+  50% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+.item-snapped {
+  animation: snapEffect 0.3s ease forwards;
 }
