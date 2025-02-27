@@ -58,12 +58,12 @@ const colors = {
 
 // Tier levels with labels and colors
 const tierLevels = [
-  { id: 'S', label: 'S', color: colors.brightred },
-  { id: 'A', label: 'A', color: colors.brightyellow },
-  { id: 'B', label: 'B', color: colors.brightgreen },
-  { id: 'C', label: 'C', color: colors.brightblue },
-  { id: 'D', label: 'D', color: colors.brightpurple },
-  { id: 'F', label: 'F', color: colors.brightaqua },
+  { id: 'S', label: 'S', color: colors.brightred, emoji: '😍' },  // In love emoji
+  { id: 'A', label: 'A', color: colors.brightyellow, emoji: '🤩' }, // Star-struck emoji
+  { id: 'B', label: 'B', color: colors.brightgreen, emoji: '😁' },  // Big grin emoji
+  { id: 'C', label: 'C', color: colors.brightblue, emoji: '🙂' },   // Slight smile emoji
+  { id: 'D', label: 'D', color: colors.brightpurple, emoji: '😐' },  // Expressionless emoji
+  { id: 'F', label: 'F', color: colors.brightaqua, emoji: '🤢' },   // Nauseated emoji
 ];
 
 // Global styles
@@ -144,6 +144,12 @@ const TierLabel = styled.div<{ color: string }>`
   font-weight: bold;
   background-color: ${props => props.color};
   color: ${colors.black};
+  cursor: pointer;
+  transition: transform 0.2s;
+  
+  &:hover {
+    transform: scale(1.05);
+  }
 `;
 
 const TierContent = styled.div`
@@ -189,7 +195,7 @@ const Item = styled.div<{ hasImage: boolean }>`
   transition: transform 0.2s, box-shadow 0.2s;
   margin: 2px;
   flex-shrink: 0;
-  overflow: hidden; /* Ensure images don't overflow */
+  overflow: visible; /* Allow dropdown to extend outside */
   
   &:hover {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
@@ -202,7 +208,7 @@ const Item = styled.div<{ hasImage: boolean }>`
   /* Control buttons that appear on hover */
   .item-controls {
     position: absolute;
-    top: -20px;
+    top: -25px;
     left: 0;
     right: 0;
     display: flex;
@@ -210,7 +216,7 @@ const Item = styled.div<{ hasImage: boolean }>`
     opacity: 0;
     transition: opacity 0.2s;
     pointer-events: none;
-    z-index: 5;
+    z-index: 100;
   }
   
   &:hover .item-controls {
@@ -444,9 +450,17 @@ function App() {
   const [modalOpen, setModalOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
+  // State for emoji mode
+  const [showEmojis, setShowEmojis] = useState(false);
+  // State for custom tier grid title
+  const [tierGridTitle, setTierGridTitle] = useState('Tier Grid');
+  const [editingTitle, setEditingTitle] = useState(false);
   
-  // Ref for input field focus
+  // Refs
   const inputRef = useRef<HTMLInputElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  // Ref for the tier grid to export as image
+  const tierGridRef = useRef<HTMLDivElement>(null);
 
   const addNewItem = () => {
     // Find the highest existing item number
@@ -516,14 +530,28 @@ function App() {
 
   const handleSaveImage = () => {
     if (activeItemId) {
-      setItemsData(prev => ({
-        ...prev,
-        [activeItemId]: {
-          ...prev[activeItemId],
-          imageUrl: imageUrl.trim() || null
-        }
-      }));
+      const trimmedUrl = imageUrl.trim();
+      if (trimmedUrl) {
+        // Simply save the URL
+        setItemsData(prev => ({
+          ...prev,
+          [activeItemId]: {
+            ...prev[activeItemId],
+            imageUrl: trimmedUrl
+          }
+        }));
+      } else {
+        // No URL provided, clear the image
+        setItemsData(prev => ({
+          ...prev,
+          [activeItemId]: {
+            ...prev[activeItemId],
+            imageUrl: null
+          }
+        }));
+      }
     }
+    // Close modal
     setModalOpen(false);
   };
 
@@ -569,13 +597,10 @@ function App() {
   // Track if we're currently dragging
   const [isDragging, setIsDragging] = useState(false);
   
-  // Ref for the tier grid to export as image
-  const tierGridRef = useRef<HTMLDivElement>(null);
-  
   // Export the tier list as an image
   const exportImage = () => {
     if (tierGridRef.current) {
-      exportAsImage(tierGridRef.current, 'tierlist.png');
+      exportAsImage(tierGridRef.current, `${tierGridTitle.toLowerCase().replace(/\s+/g, '-')}.png`);
     }
   };
 
@@ -747,7 +772,7 @@ function App() {
             <option value="">Move to...</option>
             <option value="pool">Pool</option>
             {tierLevels.map(tier => (
-              <option key={tier.id} value={tier.id}>Tier {tier.label}</option>
+              <option key={tier.id} value={tier.id}>Tier {showEmojis ? tier.emoji : tier.label}</option>
             ))}
           </select>
         </div>
@@ -784,6 +809,13 @@ function App() {
               display: 'block'
             }}
             crossOrigin="anonymous"
+            onError={(e) => {
+              // Show error icon if image fails to load
+              const target = e.target as HTMLImageElement;
+              target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23fb4934" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
+              target.style.padding = '5px';
+              target.style.backgroundColor = colors.background;
+            }}
           />
         ) : (
           <div style={{ 
@@ -851,29 +883,113 @@ function App() {
             )}
           </Droppable>
           
-          <h2>Tier Grid</h2>
-          <TierGrid ref={tierGridRef}>
-            {tierLevels.map((tier) => (
-              <TierRow key={tier.id} color={tier.color}>
-                <TierLabel color={tier.color}>{tier.label}</TierLabel>
-                <Droppable droppableId={tier.id} direction="horizontal">
-                  {(provided) => (
-                    <TierContent
-                      {...provided.droppableProps}
-                      ref={provided.innerRef}
-                    >
-                      {items[tier.id].map((id, index) => (
-                        <Draggable key={id} draggableId={id} index={index}>
-                          {(provided, snapshot) => renderItem(id, provided, snapshot)}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </TierContent>
-                  )}
-                </Droppable>
-              </TierRow>
-            ))}
-          </TierGrid>
+          <div ref={tierGridRef} style={{ paddingTop: '0.5rem' }}>
+            {editingTitle ? (
+              <div style={{ 
+                marginBottom: '1rem',
+                textAlign: 'center',
+                maxWidth: '100%',
+              }}>
+                <input
+                  ref={titleInputRef}
+                  value={tierGridTitle}
+                  onChange={(e) => setTierGridTitle(e.target.value)}
+                  onBlur={() => setEditingTitle(false)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setEditingTitle(false);
+                    }
+                  }}
+                  style={{
+                    fontSize: '2rem',
+                    fontWeight: 'bold',
+                    color: colors.brightaqua,
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    borderBottom: `2px solid ${colors.brightaqua}`,
+                    padding: '0.25rem 0.5rem',
+                    width: '100%',
+                    maxWidth: '600px',
+                    textAlign: 'center',
+                    outline: 'none'
+                  }}
+                  autoFocus
+                />
+              </div>
+            ) : (
+              <h2 
+                onClick={() => {
+                  setEditingTitle(true);
+                  // Focus the input field after render
+                  setTimeout(() => {
+                    if (titleInputRef.current) {
+                      titleInputRef.current.focus();
+                      titleInputRef.current.select();
+                    }
+                  }, 10);
+                }}
+                className="editable-title"
+                style={{ 
+                  marginBottom: '1rem',
+                  textAlign: 'center',
+                  fontSize: '2rem',
+                  color: colors.brightaqua,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  position: 'relative',
+                  paddingRight: '1.5rem'
+                }}
+              >
+                {tierGridTitle}
+                <span 
+                  className="edit-icon"
+                  style={{ 
+                    fontSize: '1rem', 
+                    color: colors.gray,
+                    opacity: 0,
+                    marginLeft: '4px',
+                    marginBottom: '8px',
+                    transition: 'opacity 0.2s ease',
+                    position: 'absolute',
+                    right: '0'
+                  }}
+                >
+                  ✏️
+                </span>
+              </h2>
+            )}
+            
+            <TierGrid>
+              {tierLevels.map((tier) => (
+                <TierRow key={tier.id} color={tier.color}>
+                  <TierLabel 
+                    color={tier.color}
+                    onClick={() => setShowEmojis(!showEmojis)}
+                  >
+                    {showEmojis ? tier.emoji : tier.label}
+                  </TierLabel>
+                  <Droppable droppableId={tier.id} direction="horizontal">
+                    {(provided) => (
+                      <TierContent
+                        {...provided.droppableProps}
+                        ref={provided.innerRef}
+                      >
+                        {items[tier.id].map((id, index) => (
+                          <Draggable key={id} draggableId={id} index={index}>
+                            {(provided, snapshot) => renderItem(id, provided, snapshot)}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </TierContent>
+                    )}
+                  </Droppable>
+                </TierRow>
+              ))}
+            </TierGrid>
+          </div>
         </DragDropContext>
       </AppContainer>
 
@@ -912,8 +1028,8 @@ function App() {
               {imageUrl && (
                 <div style={{ marginTop: '10px' }}>
                   <img 
-                    src={imageUrl} 
                     alt="Preview" 
+                    src={imageUrl}
                     style={{ 
                       maxWidth: '100%', 
                       maxHeight: '150px', 
@@ -924,6 +1040,7 @@ function App() {
                       border: `1px solid ${colors.darkgray}`
                     }} 
                     onError={(e) => {
+                      // Show error icon if image fails to load
                       const target = e.target as HTMLImageElement;
                       target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23fb4934" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
                       target.style.padding = '20px';
@@ -932,6 +1049,28 @@ function App() {
                   />
                 </div>
               )}
+              <div 
+                style={{ 
+                  marginTop: '10px', 
+                  color: colors.gray, 
+                  fontSize: '0.9rem',
+                  cursor: 'pointer'
+                }}
+                onClick={() => {
+                  // Add proxy prefix if not already there
+                  if (!imageUrl.includes('corsproxy.io')) {
+                    setImageUrl(prev => {
+                      const trimmed = prev.trim();
+                      if (trimmed) {
+                        return `https://corsproxy.io/?url=${trimmed}`;
+                      }
+                      return 'https://corsproxy.io/?url=';
+                    });
+                  }
+                }}
+              >
+                <p>Paste a direct link to an image. Some images may not display due to cross-origin restrictions.</p>
+              </div>
             </ModalForm>
             <ModalActions>
               <ModalButton onClick={closeModal}>Cancel</ModalButton>
