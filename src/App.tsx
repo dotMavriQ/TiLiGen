@@ -58,12 +58,13 @@ const colors = {
 
 // Tier levels with labels and colors
 const tierLevels = [
-  { id: 'S', label: 'S', color: colors.brightred, emoji: '😍' },  // In love emoji
-  { id: 'A', label: 'A', color: colors.brightyellow, emoji: '🤩' }, // Star-struck emoji
-  { id: 'B', label: 'B', color: colors.brightgreen, emoji: '😁' },  // Big grin emoji
-  { id: 'C', label: 'C', color: colors.brightblue, emoji: '🙂' },   // Slight smile emoji
-  { id: 'D', label: 'D', color: colors.brightpurple, emoji: '😐' },  // Expressionless emoji
-  { id: 'F', label: 'F', color: colors.brightaqua, emoji: '🤢' },   // Nauseated emoji
+  { id: 'S', label: 'S', color: colors.brightred, emoji: '😍' },
+  { id: 'A', label: 'A', color: colors.brightyellow, emoji: '🤩' },
+  { id: 'B', label: 'B', color: colors.brightgreen, emoji: '😁' },
+  { id: 'C', label: 'C', color: colors.brightblue, emoji: '🙂' },
+  { id: 'D', label: 'D', color: colors.brightpurple, emoji: '😐' },
+  { id: 'E', label: 'E', color: colors.brightaqua, emoji: '😒' },
+  { id: 'F', label: 'F', color: colors.darkgray, emoji: '🤢' },
 ];
 
 // Global styles
